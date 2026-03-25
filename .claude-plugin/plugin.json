@@ -1,0 +1,9 @@
+{
+  "name": "glider-query-writing",
+  "version": "1.0.0",
+  "description": "Write Glider queries to analyze Solidity smart contracts for security vulnerabilities, labeling, and pattern detection.",
+  "author": {
+    "name": "Hexens",
+    "url": "https://hexens.io"
+  }
+}
