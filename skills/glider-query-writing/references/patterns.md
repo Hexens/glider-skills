@@ -70,21 +70,8 @@ def query():
     return results
 ```
 
-## Pattern 5: Data Flow Tracing
+## Pattern 5: Component Decomposition
 
-```python
-ecrecovers = Instructions().with_callee_name("ecrecover").exec(100)
-return ecrecovers.filter(lambda instr:
-    not instr.forward_df().filter(lambda df:
-        "address(0)" in df.source_code()
-        and (df.is_if() or "require" in df.callee_names())
-    )
-)
-```
-
-## Pattern 6: Component Decomposition
-
-Use helper patterns from [recipes.md](recipes.md), such as recursive component extraction:
 
 ```python
 for component in get_components_recursive(instruction):
