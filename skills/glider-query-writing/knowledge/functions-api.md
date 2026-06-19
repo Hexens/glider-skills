@@ -1,5 +1,23 @@
 # Functions API
 
+## APIList / APISet
+
+Results from `.exec()` return `APIList` or `APISet` (not plain lists).
+
+**Chained attribute access** — calls the method on every element automatically:
+```python
+functions.exec(100).instructions().exec()    # gets all instructions from all functions
+```
+
+**filter()** — keep elements where predicate returns `True`:
+```python
+results.filter(lambda x: x.name == "foo")
+```
+
+**Unidimensional flattening** — nested `APIList[APIList[T]]` flattens to `APIList[T]`, enabling full declarative chains without loops.
+
+---
+
 ## Filtering
 
 ```python
@@ -12,6 +30,7 @@ Functions()
     .with_arg_type("address") / .with_arg_count(2)
     .with_callee_names(["selfdestruct"])
     .with_declarer_contract_name("ERC20")
+    .constructors()
 ```
 
 ## Property-Based Filtering
@@ -30,7 +49,7 @@ Functions()
     )
 ```
 
-Deprecated: `with_all_properties`, `with_one_property`, `without_properties`.
+**DEPRECATED:** `with_all_properties`, `with_one_property`, `without_properties` — use `with_properties()` with expressions instead.
 
 ### FunctionFilters
 
@@ -44,6 +63,9 @@ Deprecated: `with_all_properties`, `with_one_property`, `without_properties`.
 ```python
 Functions()
     .with_modifier_name("onlyOwner")
+    .with_modifier_signature("onlyRole(bytes32)")
+    .with_one_of_the_modifier_names(["onlyOwner", "onlyAdmin"])
+    .with_modifier_properties(ModifierFilters.HAS_ARGS)
     .without_modifier_name("nonReentrant")
     .without_modifier_names(["nonReentrant", "lock", "onlyOwner"])
     .without_modifiers()
@@ -54,10 +76,12 @@ Functions()
 ```python
 func.name / func.signature() / func.source_code()
 func.arguments() / func.local_variables()
-func.instructions() / func.return_instructions()
+func.instructions_recursive()     # materialized list; use filter() — no exec() needed
+func.instructions()               # chainable Instructions query builder
+func.return_instructions()
 func.callee_functions() / func.callee_functions_recursive()
 func.caller_functions() / func.caller_functions_recursive()
-func.callee_values()
+func.callee_values()              # -> APIList[Call]
 func.modifiers() / func.get_contract()
 func.is_payable() / func.is_public() / func.is_external()
 func.detect_cve()
