@@ -72,8 +72,32 @@ def query():
 
 ## Pattern 5: Component Decomposition
 
+`get_components_recursive` is defined in `recipes.md` and must be copied into any query that uses it. It flattens the full value/expression tree of an instruction into a list of components, handling all Glider value types including `Call`, `IndexAccess`, and compound expressions.
 
 ```python
+def get_components_recursive(component):
+    components = []
+    try:
+        if "IndexAccess" in str(component):
+            components.append(component.get_sequence())
+            components.append(component.get_index())
+        if isinstance(component, Call):
+            components.extend(component.get_args())
+            call_qualifier = component.get_call_qualifier()
+            if "IndexAccess" in str(call_qualifier):
+                components.append(call_qualifier)
+                components.append(call_qualifier.get_sequence())
+                components.append(call_qualifier.get_index())
+        else:
+            components = component.get_components()
+    except Exception:
+        None
+    results = []
+    for comp in components:
+        results.append(comp)
+        results.extend(get_components_recursive(comp))
+    return results
+
 for component in get_components_recursive(instruction):
     if isinstance(component, Call) and component.name == "call":
         target = component.get_call_qualifier()
@@ -81,4 +105,3 @@ for component in get_components_recursive(instruction):
             if isinstance(point, Instruction) and "abi.decode" in point.callee_names():
                 results.append(instruction)
 ```
-    
