@@ -107,7 +107,7 @@ Read only what the current task requires:
 | Entry point choice, performance, output guidance | [techniques.md](references/techniques.md) |
 | CFG, data flow, value tree, level navigation | [navigation.md](references/navigation.md) |
 | `NoneObject`, exceptions, wrong/right patterns | [error-handling.md](references/error-handling.md) |
-| Dedup, union/intersection, combining sub-queries | [recipes.md](references/recipes.md) |
+| **Always load for any non-trivial query** — essential helper functions (`get_components_recursive`, guard checks, msg.sender validation, storage write detection) plus dedup, union/intersection, and sub-query composition patterns. Missing this file is the most common cause of re-implementing helpers that already exist. | [recipes.md](references/recipes.md) |
  
 ### Knowledge Base
 
