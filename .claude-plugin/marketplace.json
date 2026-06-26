@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "glider-skills",
+  "description": "Hexens Glider security analysis skills for Solidity smart contract vulnerability detection, labeling, and pattern matching",
+  "owner": {
+    "name": "Hexens",
+    "email": "jason.tanner@hexens.io"
+  },
+  "plugins": [
+    {
+      "name": "glider-query-writing",
+      "description": "Write Glider queries to analyze Solidity smart contracts for security vulnerabilities, labeling, and pattern detection.",
+      "author": {
+        "name": "Hexens"
+      },
+      "category": "security",
+      "source": "."
+    }
+  ]
+}

@@ -5,8 +5,6 @@ description: Write Glider queries to analyze Solidity smart contracts for securi
 
 # Glider Query Writing
 
-Use this skill to write correct, efficient Glider queries with minimal context loading.
-
 ## Start Here
 
 1. Pick the right entry point: `Contracts()`, `Functions()`, or `Instructions()`.
@@ -14,7 +12,19 @@ Use this skill to write correct, efficient Glider queries with minimal context l
 3. Execute with `.exec(limit)` for bounded results.
 4. Switch to imperative logic only when declarative filters cannot express the condition.
 
-## Query Skeleton (Always Valid)
+## Table of Contents
+
+- [Query Structure](#query-structure)
+- [Three Entry Points](#three-entry-points)
+- [Core Principle: Static Analysis, Not Semantics](#core-principle-static-analysis-not-semantics)
+- [Linting Rules](#linting-rules)
+- [Additional Resources](#additional-resources) 
+
+---
+
+## Query Structure
+
+Every Glider query is a Python file with this skeleton:
 
 ```python
 from glider import *
@@ -29,63 +39,65 @@ def query():
     """
     return (
         Contracts()       # or Functions(), Instructions()
-        .with_name("X")
-        .exec(100)
+        .with_name("X")   # fluent filter chain
+        .exec(100)        # execute with result limit
     )
 ```
 
-## Hard Rules
-
+**Rules:**
 - Always `from glider import *`
-- Must define `def query()` and **always return a list**
-- If no results, return `[]`
-- If API returns one object (for example `constructor()`), wrap it as `[obj]`
-- Return only `Contract`, `Function`, `Modifier`, or `Instruction` objects
-- Include docstring metadata: `@title`, `@description`, `@tags`
-- `.exec(limit, offset)` materializes a query
+- Must define `def query()` that **always returns a list or APIList** — nothing else, ever
+- If returning no results, return `[]` (empty list)
+- If an API method returns a single object (e.g. `get_contract()`, `constructor()`), wrap it: `[obj]`
+- List elements must be `Contract`, `Function`, `Modifier`, or `Instruction` objects
+- Docstring metadata is required: `@title`, `@description`, `@tags`
+- `.exec(limit, offset)` materializes the query — returns a list of results
+- `print()` output appears in the Debug panel (useful for debugging)
 
-## Data Labeling Rule
+ 
+### Execution Limits
 
-For labeling/classification tasks, use main contracts only:
+- **Timeout**: 1000 seconds per query
+- **Output size**: 200KB max
+- **Python**: strictly sandboxed — not all built-ins available
 
-```python
-contracts = Contracts.mains().with_name("MyContract").exec(100)
-```
+---
 
-## Execution Limits
+## Three Entry Points
 
-- Timeout: 1000 seconds
-- Output size: 200KB
-- Parallelism: one query at a time per user
-- Python runtime is sandboxed
-
-## Navigation Model
+| Entry Point | Returns | Use When |
+|-------------|---------|----------|
+| `Contracts()` | Contract-level results | Finding contracts by name, interface, function signatures |
+| `Functions()` | Function-level results | Finding functions by properties, modifiers, arguments |
+| `Instructions()` | Instruction-level results | Finding specific calls, operations, patterns |
 
 ```text
 Contracts  ──.functions()──>  Functions  ──.instructions()──>  Instructions
 Contracts  <──.contracts()──  Functions  <──.functions()──────  Instructions
 ```
 
-Use this to move up/down levels as needed.
+Chain freely: `Instructions().with_callee_name("transfer").functions().contracts().exec(100)`
 
-## APIList/APISet Reminder
+---
 
-Results from `.exec()` are `APIList`/`APISet` with:
+## Core Principle: Static Analysis, Not Semantics
 
-- auto-chained method calls across all elements
-- `.filter(lambda x: ...)` for post-filtering
-- flattening behavior that supports concise chains
+Glider queries express facts about code structure — what is called, how values flow, what the CFG looks like. When identifying a behavioral pattern, target the protocol interfaces and structural properties that define it. A function that reads Chainlink prices always calls `latestRoundData()`; that structural fact is the anchor for the query, regardless of what the outer function or contract is named.
 
-## Common Pitfalls
+---
 
-1. Forgetting `.exec()` (query never runs)
-2. `.exec()` with no limit during development (too broad)
-3. Confusing `NoneObject` with `None`
-4. Mixing ALL vs ANY filters (for example `with_callee_names` vs `with_one_of_callee_names`)
-5. Overusing recursive traversals before trying non-recursive options
-6. Treating Glider like on-chain state access (it is source-structure analysis)
+## Linting Rules
 
-## Load References On Demand
+These rules apply to **every query**. Before returning any query, read and apply all rules in [knowledge/linting-rules.md](knowledge/linting-rules.md).
+
+---
+
+## Additional Resources
+
+Curated guides — read only what you need:
+
+
+### References to Load
 
 Read only what the current task requires:
 
@@ -95,6 +107,12 @@ Read only what the current task requires:
 | Entry point choice, performance, output guidance | [techniques.md](references/techniques.md) |
 | CFG, data flow, value tree, level navigation | [navigation.md](references/navigation.md) |
 | `NoneObject`, exceptions, wrong/right patterns | [error-handling.md](references/error-handling.md) |
-| Contract/Function/Instruction filter methods | [contracts-api.md](references/contracts-api.md), [functions-api.md](references/functions-api.md), [instructions-api.md](references/instructions-api.md) |
-| State vars, events, structs, loops, inheritance | [api-extended.md](references/api-extended.md) |
-| Dedup, union/intersection/subtraction, snippets | [recipes.md](references/recipes.md) |
+| **Always load for any non-trivial query** — essential helper functions (`get_components_recursive`, guard checks, msg.sender validation, storage write detection) plus dedup, union/intersection, and sub-query composition patterns. Missing this file is the most common cause of re-implementing helpers that already exist. | [recipes.md](references/recipes.md) |
+ 
+### Knowledge Base
+
+- [knowledge/instructions-api.md](knowledge/instructions-api.md) — Instructions filtering, call/instruction type filters, instance methods, CFG navigation, data flow, value system, operator/global filters
+- [knowledge/functions-api.md](knowledge/functions-api.md) — Functions filtering, property filters, modifier filters, instance methods, GlobalFilters
+- [knowledge/contracts-api.md](knowledge/contracts-api.md) — Contracts filtering, member filters, contract instance methods
+- [knowledge/api-extended.md](knowledge/api-extended.md) — StateVariables, Events, Errors, Enums, Structs, ArgumentPoints, Condition, Loop, inheritance, TaintEngine
+- [knowledge/linting-rules.md](knowledge/linting-rules.md) — Mandatory rules applied to every query before returning

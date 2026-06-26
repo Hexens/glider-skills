@@ -38,9 +38,11 @@ if isinstance(value, Call):
     resolved_fn = value.get_function()      # -> Function (if resolvable)
 ```
 
-### Working with callee_values()
+### Working with callee_values() and get_callee_values()
 
-`func.callee_values()` returns `APIList[Call]` — all call expressions within a function:
+`func.callee_values()` returns `APIList[Call]` — all call expressions within a function.
+
+`value.get_callee_values()` does the same but is called on a `Value` object (e.g., the result of `instr.get_value()`) rather than a function:
 
 ```python
 for call in func.callee_values():
@@ -73,6 +75,20 @@ if isinstance(value, VarValue):
         print("comes from local variable")
     elif isinstance(obj, GlobalVariable):
         print("comes from msg.sender, block.timestamp, etc.")
+```
+
+### Special Case: address(this)
+
+`address(this)` is a type conversion in Solidity, not a function call. It is not represented as a `Call` node in the value tree — `isinstance(value, Call)` returns `False` for it. Detect it via `.expression`:
+
+```python
+# Exact match
+if value.expression == "this":
+    ...
+
+# When address(this) may appear nested as a sub-expression (e.g. inside an argument)
+if "this" in value.expression:
+    ...
 ```
 
 ---
@@ -125,42 +141,85 @@ for prev in instruction.previous_instructions():
 
 ### has_global_df() — Quick User-Input Check
 
-`has_global_df()` returns `True` if the instruction is influenced by global variables (`msg.sender`, `tx.origin`, function arguments, etc.):
+`has_global_df()` returns `True` if the instruction is influenced by global variables (`msg.sender`, `tx.origin`, etc.) within the current function. `has_global_df_recursive()` extends this check across function boundaries (slower):
 
 ```python
 if instruction.has_global_df():
-    # The value in this instruction is controllable by the caller
+    # influenced by globals in the current function
+
+if instruction.has_global_df_recursive():
+    # influenced by globals anywhere in the call chain (cross-function, expensive)
 ```
 
-### forward_df() — What Does This Value Affect?
+### forward_df_recursive() — What Does This Value Affect?
+
+Use `forward_df_recursive()` as the default to trace all downstream uses of a value across function boundaries:
 
 ```python
-# Find everything tainted by an ecrecover result
-for point in ecrecover_instr.forward_df():
-    if point.is_if() or "require" in point.callee_names():
+# Find everything tainted by an ecrecover result (cross-function)
+for point in ecrecover_instr.forward_df_recursive():
+    if isinstance(point, Instruction) and (point.is_if() or "require" in point.callee_names()):
         print("result is used in a validation check")
+```
+
+### Detecting Guard Conditions on a Return Value
+
+When a vulnerability involves checking whether a function call's return value is validated, use `forward_df_recursive()` to trace the data flow from the call and look for downstream `require`/`assert` calls or `is_if()` instructions. This structural approach covers all guard patterns regardless of naming conventions:
+
+```python
+def has_guard(call_instr):
+    for inst in call_instr.forward_df_recursive():
+        if not isinstance(inst, Instruction):
+            continue
+        if "require" in inst.callee_names() or "assert" in inst.callee_names():
+            return True
+        if inst.is_if():
+            return True
+    return False
+
+# Usage: keep only call instructions whose return value is NOT guarded
+unguarded = Instructions().with_callee_name("get_price").exec(100).filter(
+    lambda i: not has_guard(i)
+)
 ```
 
 ### backward_df_recursive() — Where Did This Value Come From?
 
-Works across function boundaries but is **much slower** than `backward_df()`. Only use when you need cross-function tracing:
+Use `backward_df_recursive()` as the default — it crosses function boundaries and produces complete results. Use `backward_df()` (non-recursive) only when analysis must be explicitly constrained to the current function scope:
 
 ```python
-# Try non-recursive first
-for point in value.backward_df():
-    # same-function data flow — fast
-
-# Only escalate if you need cross-function tracing
+# Default: use recursive to trace across function boundaries
 for point in value.backward_df_recursive():
     if isinstance(point, Instruction) and "abi.decode" in point.callee_names():
         print("value originates from abi.decode")
     if isinstance(point, ArgumentPoint):
         print("value comes from a function argument")
+
+# Non-recursive: only when you intentionally want single-function scope
+for point in value.backward_df():
+    # same-function data flow only
 ```
 
 ---
 
 ## Level Navigation Techniques
+
+### Filtering to Main Contracts
+
+Every query should return results from main contracts only. Use `is_main()` at whatever level you are working:
+
+```python
+# Contract level — use .mains() in the chain (preferred)
+Contracts().mains().exec(100)
+
+# Function level — check the parent contract
+if func.get_contract().is_main():
+    results.append(func)
+
+# Instruction level — walk up to the contract
+if instr.get_parent().get_contract().is_main():
+    results.append(instr)
+```
 
 ### Going Up: Instruction → Function → Contract
 
@@ -203,3 +262,46 @@ all_reachable = fn.callee_functions_recursive().exec()
 all_callers = fn.caller_functions_recursive().exec()
 ```
 
+---
+
+## Structural Alternatives to Source Code Checks
+
+Never use `source_code()` for detection logic — it text-matches the raw source, misses semantically equivalent code, and matches comments and strings. Use structural API instead:
+
+```python
+# Checking for a specific function call — use callee_names()
+if "transfer" in instruction.callee_names():
+    ...
+
+# Checking for built-in calls (keccak256, ecrecover, abi.encode, etc.)
+if "keccak256" in instruction.builtin_callee_names():
+    ...
+
+# Checking calls within a function — use callee_values()
+for call in func.callee_values():
+    if call.name == "transfer":
+        ...
+
+# Checking for a zero-address or other guard — use data flow + is_if()
+for point in instr.forward_df_recursive():
+    if isinstance(point, Instruction) and (point.is_if() or "require" in point.callee_names()):
+        # There is a guard on this value
+        ...
+
+# Checking msg.sender influence — use has_global_df() or GlobalFilters
+if instruction.has_global_df():
+    # influenced by msg.sender, tx.origin, etc.
+
+sender_instrs = function.instructions().with_globals(GlobalFilters.MSG_SENDER).exec()
+
+# Checking assignment destination name or type — use get_dests()
+for dest in instr.get_dests():
+    if dest.name == "_balances":
+        ...
+    if str(dest.type) == "address":
+        ...
+
+# Checking for a state variable by name — use state_variables()
+if contract.state_variables().with_name("reserve0").exec():
+    ...
+```
