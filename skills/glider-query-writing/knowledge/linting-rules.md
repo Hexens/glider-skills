@@ -244,8 +244,8 @@ def reads_chainlink(func):
         ["latestRoundData", "getRoundData"]
     ).exec())
 
-# DB-level entry point — same query, more efficient
-Functions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).exec(100)
+# DB-level entry point — navigate from Instructions up to Functions
+Instructions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).functions().exec(100)
 
 # ERC20 token transfers — exact interface entries, not keyword guesses
 Instructions().with_one_of_callee_names(["transfer", "transferFrom"]).exec(100)
