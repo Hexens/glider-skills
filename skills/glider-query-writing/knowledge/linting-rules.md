@@ -4,9 +4,9 @@ These rules apply to **every query written by this skill**. Before returning any
 
 ---
 
-## Rule 1: No Underscore-Prefixed Variable Names
+## Rule 1: Name Variables Without a Leading Underscore
 
-Variable names must **not** start with `_`. Applies to all local variables, helper functions, loop variables, dictionaries, caches, and lambdas defined inside `query()` or any helper scope.
+Name variables without a leading `_` — the Glider sandbox reserves underscore-prefixed identifiers for its own internals (e.g. `_callable`), and a user-defined one collides with them at runtime. This applies to all local variables, helper functions, loop variables, dictionaries, caches, and lambdas defined inside `query()` or any helper scope.
 
 **Invalid:**
 ```python
@@ -191,7 +191,7 @@ Additional checks may be helpful here depending on the guard condition check. Fo
 
 ---
 
-## Rule 9: Never Use `source_code()` for Detection Logic
+## Rule 9: Detect with the Structural API, Not `source_code()`
 
 `source_code()` returns raw Solidity text. Using it with `in` or string matching for vulnerability detection is a text grep — not structural analysis. It matches comments, misses semantically equivalent code expressed differently, and produces brittle queries that break on formatting variations.
 
@@ -395,7 +395,7 @@ for func in candidates:
 
 ---
 
-## Rule 15: Do Not Use `setattr()` / `getattr()`
+## Rule 15: Access Attributes Directly — `setattr()` / `getattr()` Are Unsupported
 
 The `setattr()` and `getattr()` builtins are not supported in the Glider query environment — a query that calls either raises an error, even though it is valid Python. This most often shows up when dynamically attaching bookkeeping to an API object, or reading an attribute whose name is held in a variable.
 

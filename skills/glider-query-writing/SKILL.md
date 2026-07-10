@@ -46,7 +46,7 @@ def query():
 
 **Rules:**
 - Always `from glider import *`
-- Must define `def query()` that **always returns a list or APIList** — nothing else, ever
+- Define `def query()` that returns a list or APIList, and nothing else — the runner consumes that return value directly as the result set (return `[]` when there are no results)
 - If returning no results, return `[]` (empty list)
 - If an API method returns a single object (e.g. `get_contract()`, `constructor()`), wrap it: `[obj]`
 - List elements must be `Contract`, `Function`, `Modifier`, or `Instruction` objects
