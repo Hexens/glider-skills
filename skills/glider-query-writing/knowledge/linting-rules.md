@@ -120,7 +120,11 @@ for instr in instructions:
 
 When using declarative chains with `Contracts()`, use `.mains()` as an early filter. When iterating over functions or instructions, check `is_main()` at the top of the loop and skip non-main results.
 
-**Scoping to main contracts produces unique results.** Each deployed contract has a unique address in the Glider DB. A query anchored to `.mains()` or gated on `is_main()` returns each contract, function, or instruction exactly once — this is the uniqueness mechanism. No additional key tracking or dedup logic is needed.
+**Main-contract scoping is the uniqueness mechanism — rely on it.** Each deployed contract has a unique address in the Glider DB, so a query anchored to `.mains()` or gated on `is_main()` naturally returns each contract, function, or instruction exactly once. Because Rule 5 is already applied to every query, results are guaranteed unique by construction — trust that scoping and read results directly, e.g. `results.append(instr)`.
+
+This is why de-duplication is never part of a query: main-contract scoping has already done it. If results ever *look* duplicated, the fix is upstream — a missing `is_main()` filter (this rule) or a second entrypoint (Rule 13) — not a `seen`-set or dict/set pass over the results.
+
+(Building a lookup set for a *different* purpose — e.g. collecting the names of a function's local variables — is unrelated to this and perfectly fine.)
 
 ---
 
@@ -288,7 +292,82 @@ for point in value.backward_df_recursive():
 
 ---
 
-## Rule 12: Match Entry-Point Scope to Traversal Scope
+## Rule 12: Use `.append()`, `.extend()`, or Explicit Assignment for Accumulation
+
+When accumulating values into a list or incrementing a counter, use `.append()`, `.extend()`, or explicit assignment (`x = x + value`). The `+=` augmented operator is not supported in the Glider query environment.
+
+| Goal | Correct form |
+|---|---|
+| Add one item to a list | `results.append(item)` |
+| Merge another list in | `results.extend(other_list)` |
+| Increment a counter | `count = count + 1` |
+| Accumulate a numeric value | `total = total + value` |
+| Merge items into a set | `seen.update(other_set)` / `seen.add(item)` |
+| Merge keys into a dict | `mapping.update(other_dict)` |
+
+**Valid:**
+```python
+results.append(instr)
+results.extend(sub_results)
+count = count + 1
+seen.update(new_ids)
+```
+
+The same applies to all other augmented operators: write explicit assignment (`x = x - 1`, `x = x * factor`, etc.) in every case.
+
+The `|=` operator is also unsupported. It is easy to reach for on sets and dicts (`seen |= {x}`, `mapping |= other`) — use `.update()` (or `.add()` for a single set element) instead. Do **not** rewrite it as `seen = seen | {x}`; use the method form.
+
+| Invalid | Correct form |
+|---|---|
+| `seen |= {item}` | `seen.add(item)` |
+| `seen |= other_set` | `seen.update(other_set)` |
+| `mapping |= other_dict` | `mapping.update(other_dict)` |
+
+---
+
+## Rule 13: Use One Entrypoint; Navigate Relationships Through the API
+
+A well-formed query has **one** `Functions()` / `Instructions()` / `Contracts()` entrypoint call. All other data about related objects — a called function's properties, a parent contract's state variables, a data-flow sink — is reached by navigating from objects already in scope using the API: `.get_function()`, `.get_contract()`, `.callee_values()`, `.instructions()`, `.forward_df_recursive()`, etc.
+
+A helper function that makes its own `Functions()` or `Instructions()` call is a **second entrypoint**. Results from two independent entrypoints are disconnected — there is no structural link between them, and correlating them by string attributes (name, signature) produces coincidental matches, not relational ones.
+
+The common shape to watch for and avoid:
+
+```python
+# Second entrypoint hidden inside a helper — disconnected from the main scan
+def some_property_lookup():
+    funcs = Functions().with_properties(...).exec(20000)
+    return set(funcs.signature())          # building a lookup set from a separate scan
+
+# Main loop — correlated only by string match, not by structure
+lookup = some_property_lookup()
+for func in Functions().exec(4000):       # first entrypoint
+    for instr in func.instructions_recursive():
+        val = instr.get_value()
+        if val.signature in lookup:        # coincidental string match, not structural
+            ...
+```
+
+The correct form is to navigate from the call to the function it resolves to, and inspect that function directly:
+
+```python
+for instr in func.instructions_recursive():
+    val = instr.get_value()
+    if not isinstance(val, Call):
+        continue
+    called_fn = val.get_function()         # navigate the call → Function relationship
+    if isinstance(called_fn, NoneObject):
+        continue
+    fn_props = called_fn.get_properties()  # inspect the resolved Function directly
+    if FunctionFilters.IS_PURE in fn_props or FunctionFilters.IS_VIEW in fn_props:
+        ...
+```
+
+When a query needs a property of a related object, navigate to that object through the API and inspect it there. If the right navigation method is not obvious, check the API reference for the object type in scope.
+
+---
+
+## Rule 14: Match Entry-Point Scope to Traversal Scope
 
 When a query uses interprocedural traversal, the entry-point filter must be anchored at the same conceptual scope as the traversal — specifically, on the **data flow source**.
 
@@ -312,4 +391,34 @@ for func in candidates:
         for point in source_instr.forward_df_recursive():
             if isinstance(point, Instruction) and ...:  # matches the sink
                 results.append(point)
+```
+
+---
+
+## Rule 15: Do Not Use `setattr()` / `getattr()`
+
+The `setattr()` and `getattr()` builtins are not supported in the Glider query environment — a query that calls either raises an error, even though it is valid Python. This most often shows up when dynamically attaching bookkeeping to an API object, or reading an attribute whose name is held in a variable.
+
+Access attributes directly by name, and hold your own per-object bookkeeping in a plain `dict` keyed by a stable identifier instead of stamping it onto the object.
+
+| Invalid | Correct form |
+|---|---|
+| `getattr(instr, "callee_names")()` | `instr.callee_names()` |
+| `value = getattr(obj, attr_name, default)` | branch explicitly on the known attribute names, or read the attribute directly |
+| `setattr(func, "visited", True)` | `visited[func.signature()] = True` (a dict you own) |
+
+**Invalid:**
+```python
+for name in ("transfer", "transferFrom"):
+    if getattr(instr, name, None):
+        ...
+setattr(func, "checked", True)
+```
+
+**Valid:**
+```python
+if "transfer" in instr.callee_names() or "transferFrom" in instr.callee_names():
+    ...
+checked = {}
+checked[func.signature()] = True
 ```

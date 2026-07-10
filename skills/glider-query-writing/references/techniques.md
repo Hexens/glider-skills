@@ -28,14 +28,14 @@ Begin with the simplest possible chain that captures your target:
 
 ```python
 # Step 1: find all matching functions
-Functions().with_signature("delegates(address)").exec()
+Functions().with_signature("delegates(address)").exec(100)
 ```
 
 Run it, look at the result count. Then add one filter at a time:
 
 ```python
 # Step 2: narrow with structural callee filter
-res = Functions().with_signature("delegates(address)").exec()
+res = Functions().with_signature("delegates(address)").exec(100)
 res.filter(lambda f: not f.instructions().with_one_of_callee_names(["require", "assert"]).exec())
 ```
 
@@ -73,7 +73,7 @@ results_page1 = Functions().with_name("transfer").exec(100, 0)
 results_page2 = Functions().with_name("transfer").exec(100, 100)
 ```
 
-During development, always pass a limit to `.exec()` so queries finish quickly.
+During development, keep the limit on the first `exec()` of a top-level query small (e.g. `.exec(10)`) so queries finish quickly, then raise it once the chain works. This applies to the top-level materialization only — navigation off already-materialized results (`func.instructions()`, `contract.functions()`, `results.contracts()`) is already bounded by its parent, so it takes no argument.
 
 ---
 
@@ -178,6 +178,8 @@ for contract in contracts:
 
 - **exec() early**: when you need to iterate results in Python with imperative logic
 - **exec() late**: when you can keep chaining declarative filters
+
+Whichever placement you choose, the limit goes on the first `exec()` of the top-level query; any `exec()` that navigates off those materialized results takes no argument.
 
 ```python
 # exec() late — chain keeps narrowing in DB
