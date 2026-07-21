@@ -1,5 +1,5 @@
 {
   "enabledPlugins": {
-    "wordpress.com@claude-plugins-official": true
+    "build-with-wordpress@claude-plugins-official": true
   }
 }
