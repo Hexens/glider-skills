@@ -9,7 +9,7 @@ description: Write Glider queries to analyze Solidity smart contracts for securi
 
 1. Pick the right entry point: `Contracts()`, `Functions()`, or `Instructions()`.
 2. Build a declarative filter chain first.
-3. Execute with `.exec(limit)` for bounded results.
+3. Execute with `.exec(limit)` on the top-level query; leave later navigation `.exec()` empty (see below).
 4. Switch to imperative logic only when declarative filters cannot express the condition.
 
 ## Table of Contents
@@ -46,12 +46,13 @@ def query():
 
 **Rules:**
 - Always `from glider import *`
-- Must define `def query()` that **always returns a list or APIList** — nothing else, ever
+- Define `def query()` that returns a list or APIList, and nothing else — the runner consumes that return value directly as the result set (return `[]` when there are no results)
 - If returning no results, return `[]` (empty list)
 - If an API method returns a single object (e.g. `get_contract()`, `constructor()`), wrap it: `[obj]`
 - List elements must be `Contract`, `Function`, `Modifier`, or `Instruction` objects
 - Docstring metadata is required: `@title`, `@description`, `@tags`
 - `.exec(limit, offset)` materializes the query — returns a list of results
+- Pass a limit to the **first** `exec()` of a top-level query (`Contracts()`/`Functions()`/`Instructions()`) — it scans the whole codebase. `exec()` that navigates off already-materialized results (`func.instructions()`, `contract.functions()`, `results.contracts()`) is already bounded by its parent, so call it with no argument
 - `print()` output appears in the Debug panel (useful for debugging)
 
  
@@ -107,7 +108,7 @@ Read only what the current task requires:
 | Entry point choice, performance, output guidance | [techniques.md](references/techniques.md) |
 | CFG, data flow, value tree, level navigation | [navigation.md](references/navigation.md) |
 | `NoneObject`, exceptions, wrong/right patterns | [error-handling.md](references/error-handling.md) |
-| **Always load for any non-trivial query** — essential helper functions (`get_components_recursive`, guard checks, msg.sender validation, storage write detection) plus dedup, union/intersection, and sub-query composition patterns. Missing this file is the most common cause of re-implementing helpers that already exist. | [recipes.md](references/recipes.md) |
+| **Always load for any non-trivial query** — essential helper functions (`get_components_recursive`, guard checks, msg.sender validation, storage write detection) plus union/intersection and sub-query composition patterns. Missing this file is the most common cause of re-implementing helpers that already exist. | [recipes.md](references/recipes.md) |
  
 ### Knowledge Base
 

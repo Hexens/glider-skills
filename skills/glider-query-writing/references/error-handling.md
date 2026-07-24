@@ -225,7 +225,7 @@ instructions.filter(lambda i: i.has_global_df()).filter(expensive_check)
 1. **Forgetting `.exec()`** — filters are lazy; nothing runs until `.exec(limit, offset)`
 2. **`.exec()` without limit** — returns all results; use `.exec(100)` during development
 3. **`NoneObject` vs `None`** — many methods return `NoneObject`; use `isinstance(x, NoneObject)` not `x is None`
-4. **`with_callee_names` vs `with_one_of_callee_names`** — `with_callee_names` requires ALL present; `with_one_of_callee_names` requires ANY
+4. **`with_callee_names` vs `with_one_of_callee_names`** — `with_callee_names` on `Functions()` requires ALL present; `with_one_of_callee_names` and `with_all_callee_names` are `Instructions()`-only methods — they do not exist on `Functions()`. To find functions that call ANY of a set of names at the DB level, use `Instructions().with_one_of_callee_names([...]).functions()`
 5. **`sensitivity` parameter** — name matching is case-sensitive by default; pass `sensitivity=False` for case-insensitive
 6. **Trying to read on-chain state** — Glider does NOT support reading runtime state (storage values, balances). Query against source code structure only
 7. **Overly broad functional queries** — trying to find "any function that does X" by behavior is usually too computationally intensive. Anchor on a specific protocol interface signature or structural property
@@ -245,7 +245,7 @@ When a query targets a behavioral pattern — "find functions that read oracle p
 The Chainlink price feed interface defines `latestRoundData()` and `getRoundData(uint80)`. Any function that reads Chainlink prices calls one of these methods — a structural fact that is invariant to how the developer named the outer function or contract:
 
 ```python
-price_readers = Functions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).exec(100)
+price_readers = Instructions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).functions().exec(100)
 ```
 
 A function named `updateCollateral()`, `_settlePnl()`, or `liquidate()` will all appear if they call `latestRoundData()` internally. The query is complete because it targets what the code *does*, not what it is *named*.

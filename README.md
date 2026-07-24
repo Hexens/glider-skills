@@ -21,6 +21,15 @@ git clone git@github.com:Hexens/glider-skills.git
 cd glider-skills && /plugins install .
 ```
 
+### Codex
+
+Clone the repository into your Codex skills directory, then create a symbolic link to the skill:
+
+```bash
+git clone git@github.com:Hexens/glider-skills.git ~/.codex/skills/glider-skills
+ln -s glider-skills/skills/glider-query-writing ~/.codex/skills/glider-query-writing
+```
+
 ### Cursor
 
 Clone into your Cursor skills directory:

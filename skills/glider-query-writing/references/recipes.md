@@ -56,8 +56,8 @@ Functions()
 .contracts()
 .exec()
 
-# Functions that call ANY of these methods
-Functions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).exec(100)
+# Functions that call ANY of these methods — start from Instructions, navigate up
+Instructions().with_one_of_callee_names(["latestRoundData", "getRoundData"]).functions().exec(100)
 ```
 
 ### Subtraction: Exclude results
